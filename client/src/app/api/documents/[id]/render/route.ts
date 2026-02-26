@@ -2,14 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
-import sharp from "sharp";
 import { readFile, mkdir } from "fs/promises";
 import path from "path";
 
 /**
- * Pixel-level analysis: renders EVERY page of the PDF as a PNG,
- * inverts colors and boosts contrast to reveal hidden white-on-white text.
- * Returns an array of per-page result image paths.
+ * Server-side PDF page renderer: renders EVERY page of the PDF as a
+ * clean PNG image (no processing). Used by the "Original" panel so
+ * all three panels display consistently via server-rendered images.
  */
 export async function POST(
   req: NextRequest,
@@ -34,7 +33,10 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Always regenerate so stale cached outputs don't persist.
+  const publicDir = `/results/${user.id}/${id}/original`;
+  const resultsDir = path.join(process.cwd(), "public", publicDir);
+
+  // Always regenerate so stale cached renders don't persist.
 
   try {
     const pdfPath = path.join(process.cwd(), "public", doc.filePath);
@@ -47,19 +49,9 @@ export async function POST(
     const pdfDoc = await loadingTask.promise;
     const numPages = pdfDoc.numPages;
 
-    const resultsDir = path.join(
-      process.cwd(),
-      "public",
-      "results",
-      user.id,
-      id,
-      "pixel"
-    );
     await mkdir(resultsDir, { recursive: true });
 
-    const publicDir = `/results/${user.id}/${id}/pixel`;
     const pages: { page: number; path: string }[] = [];
-
     const { createCanvas } = await import("@napi-rs/canvas");
 
     for (let pageNum = 1; pageNum <= numPages; pageNum++) {
@@ -72,8 +64,7 @@ export async function POST(
       const canvas = createCanvas(width, height);
       const ctx = canvas.getContext("2d");
 
-      // Fill with white background first — node-canvas starts transparent
-      // which causes the image to appear all-black after processing
+      // Fill white background — node-canvas defaults to transparent
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, width, height);
 
@@ -85,23 +76,13 @@ export async function POST(
         viewport,
       }).promise;
 
-      const imageBuffer = canvas.toBuffer("image/png");
-
       const resultFileName = `page_${pageNum}.png`;
       const resultPath = path.join(resultsDir, resultFileName);
 
-      // Pixel analysis pipeline:
-      // 1. flatten alpha to white (ensures no transparent areas)
-      // 2. grayscale for clarity
-      // 3. normalize stretches histogram to full 0-255 range,
-      //    revealing subtle near-white hidden text
-      // 4. sharpen edges to make text crisp
-      await sharp(imageBuffer)
-        .flatten({ background: { r: 255, g: 255, b: 255 } })
-        .grayscale()
-        .normalize()
-        .sharpen({ sigma: 3 })
-        .toFile(resultPath);
+      // Write the raw rendered PNG — no sharp processing
+      const buffer = canvas.toBuffer("image/png");
+      const { writeFile } = await import("fs/promises");
+      await writeFile(resultPath, buffer);
 
       pages.push({
         page: pageNum,
@@ -109,20 +90,19 @@ export async function POST(
       });
     }
 
-    await prisma.pdfDocument.update({
-      where: { id },
-      data: {
-        pixelResultDir: publicDir,
-        pixelPageCount: numPages,
-        pageCount: numPages,
-      },
-    });
+    // Update pageCount if not set
+    if (doc.pageCount === 0) {
+      await prisma.pdfDocument.update({
+        where: { id },
+        data: { pageCount: numPages },
+      });
+    }
 
     return NextResponse.json({ pages, pageCount: numPages });
   } catch (e) {
-    console.error("Pixel analysis error:", e);
+    console.error("Render error:", e);
     return NextResponse.json(
-      { error: "Pixel analysis failed" },
+      { error: "Page rendering failed" },
       { status: 500 }
     );
   }

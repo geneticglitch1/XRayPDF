@@ -42,17 +42,17 @@ export default function Home() {
         </div>
 
         <h1 className="max-w-3xl text-5xl font-extrabold leading-[1.1] tracking-tight md:text-7xl">
-          Reveal{" "}
+          Remove{" "}
           <span className="bg-gradient-to-r from-violet-400 via-fuchsia-400 to-pink-400 bg-clip-text text-transparent">
-            Hidden Text
+            Hidden Content
           </span>{" "}
-          in Any PDF
+          from Any PDF
         </h1>
 
         <p className="mt-6 max-w-xl text-lg leading-relaxed text-zinc-400 md:text-xl">
-          Upload your homework PDF and instantly uncover invisible text hidden
-          with white fonts, tiny sizes, or steganographic tricks — powered by
-          pixel analysis &amp; Tesseract&nbsp;OCR.
+          Upload your PDF and clean it page-by-page by stripping suspicious
+          hidden layers, faint overlays, and stealth text patterns using
+          server-side pixel processing and Tesseract&nbsp;OCR.
         </p>
 
         <div className="mt-10 flex flex-col gap-4 sm:flex-row">
@@ -94,18 +94,18 @@ export default function Home() {
         {[
           {
             icon: "🔍",
-            title: "Pixel Analysis",
-            desc: "Inverts and contrast-boosts every page to expose hidden white-on-white text instantly.",
+            title: "Pixel Sanitization",
+            desc: "Processes each page to isolate and neutralize hidden low-contrast content before export.",
           },
           {
             icon: "🔡",
-            title: "Tesseract OCR",
-            desc: "Server-side OCR detects tiny or cleverly-colored text that pixel analysis alone can't catch.",
+            title: "OCR Verification",
+            desc: "Runs OCR across every page so hidden text can be reviewed and removed confidently.",
           },
           {
             icon: "📄",
-            title: "Side-by-Side View",
-            desc: "Compare original, pixel-revealed, and OCR results in a beautiful three-panel layout.",
+            title: "Clean Export Workflow",
+            desc: "Review original vs processed outputs side-by-side and download sanitized per-page results.",
           },
         ].map((f) => (
           <div

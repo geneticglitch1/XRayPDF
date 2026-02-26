@@ -1,65 +1,93 @@
-# XRayPDF 🔍✨
+# XRayPDF
 
-**XRayPDF** is a powerful web application designed to help students uncover hidden text in homework PDFs. Teachers sometimes embed text in tricky ways—using near‑invisible colors, extremely small fonts, or even steganographic tricks. PixelReveal renders each PDF page as an image, then applies a combination of pixel‑level analysis and Optical Character Recognition (OCR) to detect and reveal any hidden content. The result is a new, enhanced image where the hidden text becomes clearly visible.
+XRayPDF is a web app for sanitizing PDFs by extracting suspicious hidden content and producing cleaner outputs.
 
-![XRayPDF Demo](https://via.placeholder.com/800x400.png?text=PixelReveal+Demo+Screenshot)  
-*will replace with actual demo screenshot)*
+Instead of only "finding" hidden text, the pipeline is designed to help you remove or neutralize hidden layers by generating processed page images and exportable PDFs.
 
----
+## What the app does
 
-## 🚀 Features
+- Uploads a PDF (up to 10MB)
+- Renders each page server-side into images
+- Runs pixel sanitization on each page to neutralize low-contrast/hidden overlays
+- Runs per-page Tesseract OCR for text verification
+- Lets you review outputs in a 3-panel viewer (Original / Pixel / OCR)
+- Lets you download per-page files or convert processed pages into a single PDF
 
-- 📤 **Upload PDF** – Drag‑and‑drop or select a PDF file.
-- 🖼️ **Page‑by‑Page Rendering** – Each page is converted to a high‑resolution image.
-- 🔎 **Pixel‑Level Analysis** – Detects text with near‑background colors, low contrast, or steganographic patterns.
-- 🔡 **OCR for Tiny Text** – Identifies and extracts extremely small fonts (e.g., <8pt).
-- 🎨 **Revealed Image Generation** – Enhances low‑contrast areas, magnifies tiny text regions, or overlays OCR‑extracted text.
-- 👁️ **Side‑by‑Side Comparison** – View original and revealed pages together.
-- ⬇️ **Download Results** – Save the enhanced image for offline study.
+## Extraction + removal workflow
 
----
+1. **Render original pages**
+   - Each PDF page is rasterized to a PNG on the server.
+   - This gives a deterministic image baseline for analysis.
 
-## 🧠 How It Works
+2. **Pixel sanitization (removal path)**
+   - Every rendered page goes through image processing (`sharp`):
+     - flatten alpha to white background
+     - grayscale
+     - normalize contrast
+     - sharpen edges
+   - Goal: make suspicious low-contrast hidden layers obvious and easier to remove/ignore in sanitized exports.
 
-1. **Upload PDF**  
-   The user uploads a PDF file. The backend uses `pdf.js` to render each page to a canvas at a high DPI, producing a sharp image buffer.
+3. **OCR verification (trust but verify)**
+   - Tesseract runs page-by-page on server-rendered images.
+   - OCR text output helps validate what was present, even when visuals are ambiguous.
+   - If a processed image is not convincing, use OCR text as the secondary evidence channel.
 
-2. **Pixel Analysis**  
-   The image is processed with `sharp` to:
-   - Stretch contrast to amplify subtle differences.
-   - Invert colors to reveal light‑on‑light text.
-   - Detect edges that may indicate character shapes.
+4. **Download + PDF conversion**
+   - Download all per-page PNG/TXT files directly.
+   - Use the **PDF** button (Original and Pixel panels) to convert page images into one downloadable PDF.
 
-3. **OCR for Tiny Text**  
-   The same page image is fed to `tesseract.js`. The OCR engine identifies text regions and estimates font sizes. Text smaller than a configurable threshold (e.g., 8pt equivalent) is flagged as “tiny hidden text.”
+## How to use OCR output to find hidden text
 
-4. **Revealed Image Generation**  
-   Based on the analysis:
-   - Low‑contrast areas are enhanced.
-   - Tiny text regions are cropped, upscaled, and blended back into the image.
-   - Optionally, the OCR‑extracted text can be overlaid in a large, clear font.
+If the image result looks unclear:
 
-5. **Display Results**  
-   The original and revealed images are shown side‑by‑side. Users can download the revealed image or toggle different enhancement modes.
+- Open the OCR panel and inspect text per page.
+- Check low-confidence pages manually in the image panels.
+- Compare OCR text against expected visible text from the original.
+- Unexpected words, extra lines, or mismatched answers can indicate hidden content that the eye missed.
 
----
+## Stack
 
-## 🛠️ Tech Stack
+- Next.js App Router
+- Prisma + PostgreSQL
+- NextAuth (Google)
+- `pdfjs-dist` for PDF parsing
+- `@napi-rs/canvas` for server-side rendering
+- `sharp` for image processing
+- `tesseract.js` for OCR
+- `pdf-lib` for image-to-PDF export
 
-| Area               | Technology                                                                 |
-|--------------------|----------------------------------------------------------------------------|
-| Frontend           | [Next.js](https://nextjs.org/) (App Router), [React](https://reactjs.org/), [Tailwind CSS](https://tailwindcss.com/) |
-| Backend            | Next.js API routes                                                         |
-| PDF Rendering      | [pdf.js](https://mozilla.github.io/pdf.js/) (Mozilla)                      |
-| Image Processing   | [sharp](https://sharp.pixelplumbing.com/)                                  |
-| OCR                | [tesseract.js](https://tesseract.projectnaptha.com/)                       |
-| Deployment         | [Vercel](https://vercel.com/) (frontend) + optional self‑hosted worker     |
+## Local development
 
----
+```bash
+cd client
+npm install
+npm run dev
+```
 
-## 📦 Installation
+Open http://localhost:3000
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/pixelrevel.git
-   cd pixelrevel
+## Production Docker
+
+Build:
+
+```bash
+cd client
+docker build -t xraypdf:latest .
+```
+
+Run:
+
+```bash
+docker run --rm -p 3000:3000 \
+  -e DATABASE_URL="postgresql://user:pass@host:5432/db" \
+  -e NEXTAUTH_SECRET="your-secret" \
+  -e NEXTAUTH_URL="http://localhost:3000" \
+  -e GOOGLE_CLIENT_ID="your-google-client-id" \
+  -e GOOGLE_CLIENT_SECRET="your-google-client-secret" \
+  xraypdf:latest
+```
+
+## Notes
+
+- OCR is designed as a verification step and should be reviewed with page images.
+- For best results, re-run analysis on a fresh upload if source PDF structure changes.

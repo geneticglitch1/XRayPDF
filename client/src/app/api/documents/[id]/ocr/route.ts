@@ -80,7 +80,7 @@ export async function POST(
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          const { createCanvas } = await import("canvas");
+          const { createCanvas } = await import("@napi-rs/canvas");
           const Tesseract = await import("tesseract.js");
 
           const allPages: { page: number; path: string }[] = [];
@@ -105,6 +105,10 @@ export async function POST(
 
             const canvas = createCanvas(width, height);
             const ctx = canvas.getContext("2d");
+
+            // Fill white background for accurate OCR
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, width, height);
 
             await page.render({
               // eslint-disable-next-line @typescript-eslint/no-explicit-any

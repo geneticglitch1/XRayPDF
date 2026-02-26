@@ -17,6 +17,7 @@ type DocData = {
   createdAt: string;
 };
 
+type OriginalPage = { page: number; path: string };
 type PixelPage = { page: number; path: string };
 type OcrPage = {
   page: number;
@@ -33,6 +34,11 @@ export default function ViewerPage({
   const { id } = use(params);
   const [doc, setDoc] = useState<DocData | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Original server-rendered state
+  const [originalLoading, setOriginalLoading] = useState(false);
+  const [originalPages, setOriginalPages] = useState<OriginalPage[]>([]);
+  const [originalCurrentPage, setOriginalCurrentPage] = useState(1);
 
   // Pixel state
   const [pixelLoading, setPixelLoading] = useState(false);
@@ -57,6 +63,8 @@ export default function ViewerPage({
       const found = data.documents.find((d: DocData) => d.id === id);
       if (found) {
         setDoc(found);
+        // Auto-trigger original render
+        renderOriginalPages(found.id);
         // Auto-trigger pixel if not done yet
         if (!found.pixelResultDir || found.pixelPageCount === 0) {
           runPixelAnalysis(found.id);
@@ -84,6 +92,22 @@ export default function ViewerPage({
   useEffect(() => {
     fetchDoc();
   }, [fetchDoc]);
+
+  const renderOriginalPages = async (docId: string) => {
+    setOriginalLoading(true);
+    try {
+      const res = await fetch(`/api/documents/${docId}/render`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setOriginalPages(data.pages);
+      }
+    } catch (e) {
+      console.error("Render error:", e);
+    }
+    setOriginalLoading(false);
+  };
 
   const runPixelAnalysis = async (docId: string) => {
     setPixelLoading(true);
@@ -227,6 +251,29 @@ export default function ViewerPage({
     });
   };
 
+  const downloadAsPdf = async (type: "original" | "pixel") => {
+    if (!doc) return;
+    try {
+      const res = await fetch(`/api/documents/${doc.id}/export?type=${type}`);
+      if (!res.ok) {
+        console.error("PDF export failed", await res.text());
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${doc.originalName.replace(/\.pdf$/i, "")}_${type}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("PDF download failed", err);
+    }
+  };
+
   if (loading) {
     return (
       <main className="flex min-h-[60vh] items-center justify-center">
@@ -301,18 +348,108 @@ export default function ViewerPage({
 
       {/* 3-Panel Grid */}
       <div className="grid gap-4 sm:grid-cols-3">
-        {/* Panel 1: Original */}
+        {/* Panel 1: Original (server-rendered) */}
         <Panel
           title="Original PDF"
-          badge={doc.pageCount > 0 ? `${doc.pageCount} pages` : "Source"}
+          badge={
+            originalLoading
+              ? "Rendering..."
+              : originalPages.length > 0
+                ? `${originalPages.length} pages`
+                : "Source"
+          }
           badgeColor="bg-blue-500/10 text-blue-400"
           visible={activeTab === "original"}
+          onDownload={
+            originalPages.length > 0
+              ? () => {
+                  originalPages.forEach((p) => {
+                    const a = document.createElement("a");
+                    a.href = p.path;
+                    a.download = p.path.split("/").pop() || `page_${p.page}.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                  });
+                }
+              : undefined
+          }
+          onDownloadPdf={
+            originalPages.length > 0
+              ? () => downloadAsPdf("original")
+              : undefined
+          }
         >
-          <iframe
-            src={doc.filePath}
-            className="h-full w-full rounded-lg"
-            title="Original PDF"
-          />
+          {originalLoading ? (
+            <div className="flex h-full items-center justify-center">
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+                <p className="text-sm text-zinc-500">Rendering pages...</p>
+              </div>
+            </div>
+          ) : originalPages.length > 0 ? (
+            <div className="flex h-full flex-col">
+              {/* Page navigator */}
+              <div className="flex items-center justify-between border-b border-white/5 px-4 py-2">
+                <button
+                  onClick={() =>
+                    setOriginalCurrentPage((p) => Math.max(1, p - 1))
+                  }
+                  disabled={originalCurrentPage <= 1}
+                  className="rounded-md border border-white/10 px-2 py-1 text-xs font-medium text-zinc-400 transition hover:bg-white/5 disabled:opacity-30"
+                >
+                  Prev
+                </button>
+                <span className="text-xs text-zinc-400">
+                  Page {originalCurrentPage} / {originalPages.length}
+                </span>
+                <button
+                  onClick={() =>
+                    setOriginalCurrentPage((p) =>
+                      Math.min(originalPages.length, p + 1)
+                    )
+                  }
+                  disabled={originalCurrentPage >= originalPages.length}
+                  className="rounded-md border border-white/10 px-2 py-1 text-xs font-medium text-zinc-400 transition hover:bg-white/5 disabled:opacity-30"
+                >
+                  Next
+                </button>
+              </div>
+              {/* Image display */}
+              <div className="flex-1 overflow-auto p-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={originalPages[originalCurrentPage - 1]?.path}
+                  alt={`Original page ${originalCurrentPage}`}
+                  className="w-full rounded-lg object-contain"
+                />
+              </div>
+              {/* Page thumbnails */}
+              {originalPages.length > 1 && (
+                <div className="flex gap-1 overflow-x-auto border-t border-white/5 p-2">
+                  {originalPages.map((p) => (
+                    <button
+                      key={p.page}
+                      onClick={() => setOriginalCurrentPage(p.page)}
+                      className={`flex-shrink-0 rounded-md border px-2 py-1 text-[10px] font-semibold transition ${
+                        originalCurrentPage === p.page
+                          ? "border-blue-500 bg-blue-500/20 text-blue-300"
+                          : "border-white/10 text-zinc-500 hover:text-zinc-300"
+                      }`}
+                    >
+                      {p.page}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <iframe
+              src={doc.filePath}
+              className="h-full w-full rounded-lg"
+              title="Original PDF"
+            />
+          )}
         </Panel>
 
         {/* Panel 2: Pixel Analysis */}
@@ -329,6 +466,9 @@ export default function ViewerPage({
           visible={activeTab === "pixel"}
           onDownload={
             pixelPages.length > 0 ? () => downloadAll("pixel") : undefined
+          }
+          onDownloadPdf={
+            pixelPages.length > 0 ? () => downloadAsPdf("pixel") : undefined
           }
         >
           {pixelLoading ? (
@@ -582,6 +722,7 @@ function Panel({
   children,
   visible,
   onDownload,
+  onDownloadPdf,
 }: {
   title: string;
   badge: string;
@@ -589,6 +730,7 @@ function Panel({
   children: React.ReactNode;
   visible: boolean;
   onDownload?: () => void;
+  onDownloadPdf?: () => void;
 }) {
   return (
     <div
@@ -619,6 +761,15 @@ function Panel({
                 />
               </svg>
               All
+            </button>
+          )}
+          {onDownloadPdf && (
+            <button
+              onClick={onDownloadPdf}
+              className="rounded-md border border-white/10 px-2 py-1 text-[10px] font-semibold text-zinc-400 transition hover:border-white/20 hover:text-white"
+              title="Convert to PDF and download"
+            >
+              PDF
             </button>
           )}
           <span

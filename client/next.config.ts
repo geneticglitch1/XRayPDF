@@ -3,7 +3,13 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
-  serverExternalPackages: ["canvas", "sharp", "tesseract.js", "pdfjs-dist"],
+  output: "standalone",
+  serverExternalPackages: [
+    "@napi-rs/canvas",
+    "sharp",
+    "tesseract.js",
+    "pdfjs-dist",
+  ],
   images: {
     remotePatterns: [
       {
