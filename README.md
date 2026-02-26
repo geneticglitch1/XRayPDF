@@ -2,7 +2,7 @@
 
 **XRayPDF** is a powerful web application designed to help students uncover hidden text in homework PDFs. Teachers sometimes embed text in tricky ways—using near‑invisible colors, extremely small fonts, or even steganographic tricks. PixelReveal renders each PDF page as an image, then applies a combination of pixel‑level analysis and Optical Character Recognition (OCR) to detect and reveal any hidden content. The result is a new, enhanced image where the hidden text becomes clearly visible.
 
-![XRayPDF Demo](https://via.placeholder.com/800x400.png?text=PixelReveal+Demo+Screenshot)  
+![XRayPDF Demo]()  
 *will replace with actual demo screenshot)*
 
 ---
@@ -61,5 +61,5 @@
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/pixelrevel.git
-   cd pixelrevel
+   git clone https://github.com/geneticglitch/xraypdf.git
+   cd xraypdf/client
