@@ -1,0 +1,15 @@
+# Local environment — docker compose reads .env from the repo root.
+# Never commit it; .env.example is the tracked template.
+.env
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
+
+# Editor
+.idea/
+.vscode/
+
+# Claude Code local dev helpers
+.claude/launch.json

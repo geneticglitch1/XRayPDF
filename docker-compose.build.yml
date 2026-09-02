@@ -1,0 +1,10 @@
+# Override that builds the app image from ./client instead of pulling the
+# published GHCR image. Use it when working on the app itself:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up --build
+services:
+  xray:
+    build:
+      context: ./client
+    image: xraypdf:local
+    pull_policy: never

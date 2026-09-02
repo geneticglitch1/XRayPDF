@@ -10,5 +10,6 @@ export default withAuth(
 );
 
 export const config = {
-    matcher: ["/dashboard/:path*", "/api/:path*"],
+    // Exclude /api/health so container healthchecks aren't redirected to login.
+    matcher: ["/dashboard/:path*", "/api/((?!health).*)"],
 };

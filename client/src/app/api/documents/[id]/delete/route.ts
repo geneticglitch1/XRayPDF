@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
+import { removeDocumentFiles } from "@/lib/storage";
 
 export async function DELETE(
   _req: NextRequest,
@@ -28,6 +29,7 @@ export async function DELETE(
   }
 
   await prisma.pdfDocument.delete({ where: { id } });
+  await removeDocumentFiles(user.id, id, doc.filePath);
 
   return NextResponse.json({ success: true });
 }

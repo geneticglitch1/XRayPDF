@@ -23,19 +23,33 @@ model user {
 }
 
 model pdfDocument {
-  id              String   @id @default(uuid())
+  id              String    @id @default(uuid())
   userId          String
-  user            user     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            user      @relation(fields: [userId], references: [id], onDelete: Cascade)
   originalName    String
   filePath        String
   pixelResultDir  String?
   ocrResultDir    String?
-  ocrRan          Boolean  @default(false)
+  ocrRan          Boolean   @default(false)
   fileSize        Int
-  pageCount       Int      @default(1)
-  pixelPageCount  Int      @default(0)
-  ocrPageCount    Int      @default(0)
-  createdAt       DateTime @default(now())
+  pageCount       Int       @default(1)
+  pixelPageCount  Int       @default(0)
+  ocrPageCount    Int       @default(0)
+  createdAt       DateTime  @default(now())
+  pages           pdfPage[]
 
   @@index([userId])
+}
+
+model pdfPage {
+  id         String      @id @default(uuid())
+  documentId String
+  document   pdfDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  pageNumber Int
+  confidence Float
+  wordsJson  Json
+  createdAt  DateTime    @default(now())
+
+  @@unique([documentId, pageNumber])
+  @@index([documentId])
 }
