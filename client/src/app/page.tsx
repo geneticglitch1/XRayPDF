@@ -1,8 +1,7 @@
 "use client";
 
-import { signIn, useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useState } from "react";
 import HiddenTextDemo from "@/components/HiddenTextDemo";
 
 const REPO_URL = "https://github.com/geneticglitch1/XRayPDF";
@@ -12,17 +11,17 @@ const HIDING_SPOTS = [
   {
     title: "White text on white paper",
     desc: "Rendered in #FFFFFF. Invisible on screen and in print, still returned verbatim by every text extractor.",
-    caught: "Contrast normalization drags it into visible gray",
+    caught: "Invisible on white, unmistakable on black",
   },
   {
     title: "Near-zero font sizes",
     desc: "Text set at half a point reads as a smudge, or as nothing at all, but copies and pastes back at full length.",
-    caught: "Renders at 2× scale, so the smudge becomes glyphs",
+    caught: "Rendered at 2× scale, so the smudge becomes glyphs",
   },
   {
     title: "Text behind images",
     desc: "A full-page graphic drawn on top of a live text run. Looks like a scan. It is not a scan.",
-    caught: "Flattening rebuilds the page from what is visible",
+    caught: "Flattening rebuilds the page from what is drawn",
   },
   {
     title: "Invisible render modes",
@@ -44,38 +43,32 @@ const HIDING_SPOTS = [
 const STEPS = [
   {
     n: "01",
-    title: "Rasterize",
-    tool: "pdfjs-dist + @napi-rs/canvas",
-    desc: "Every page renders to a PNG at 2× scale on a forced white background. This is the honest picture of the document: whatever is actually drawn, and nothing else.",
+    title: "Render it twice",
+    tool: "pdf.js, in your tab",
+    desc: "Each page is rasterized at 2× scale — once on a white backdrop, once on black. Both renders come from the same page, drawn by the same engine, differing only in what sits behind the ink.",
   },
   {
     n: "02",
-    title: "Push the contrast",
-    tool: "sharp",
-    desc: "Flatten alpha onto white, convert to grayscale, stretch the histogram across the full 0–255 range, sharpen. Ink that was one shade off white lands in plain view.",
+    title: "Compare the two",
+    tool: "a per-pixel diff",
+    desc: "White ink disappears into the white render and blazes in the black one; ordinary dark ink does the reverse. Invert the black-backed render, take the darker pixel of the pair, and every mark on the page turns dark on white — whatever colour it was drawn in.",
   },
   {
     n: "03",
     title: "Read it back",
-    tool: "tesseract.js",
-    desc: "OCR runs over the sanitized image and returns word boxes with per-word confidence. Overlay them on the page to see exactly where the surprises are.",
+    tool: "tesseract.js · optional",
+    desc: "OCR over that combined image transcribes the hidden text alongside the visible copy. It costs an ~8 MB model download, so it is off until you ask for it.",
   },
   {
     n: "04",
     title: "Flatten the export",
     tool: "pdf-lib",
-    desc: "Rebuild the document from the page images. No text layer, no annotations, no object history — nothing left for anything to hide inside.",
+    desc: "Rebuild the document from page images. No text layer, no annotations, no object history — nothing left for anything to hide inside.",
   },
 ];
 
 export default function Home() {
-  const { data: session, status } = useSession();
-  const router = useRouter();
   const [xray, setXray] = useState(false);
-
-  useEffect(() => {
-    if (session) router.replace("/dashboard");
-  }, [session, router]);
 
   return (
     <div className="min-h-screen bg-stock text-ink">
@@ -108,13 +101,12 @@ export default function Home() {
               X-ray
             </button>
 
-            <button
-              onClick={() => signIn("google")}
-              disabled={status === "loading"}
-              className="bg-ink px-5 py-2.5 text-sm font-medium text-stock transition-colors hover:bg-signal disabled:opacity-50"
+            <Link
+              href="/scan"
+              className="bg-ink px-5 py-2.5 text-sm font-medium text-stock transition-colors hover:bg-signal"
             >
-              {status === "loading" ? "…" : "Sign in"}
-            </button>
+              Open the scanner
+            </Link>
           </div>
         </div>
       </nav>
@@ -124,7 +116,7 @@ export default function Home() {
         <div className="grid gap-10 border-b border-rule py-16 md:py-24 lg:grid-cols-[1.6fr_1fr] lg:gap-20">
           <div>
             <p className="label mb-8 text-ink-faint">
-              Document sanitizer · Apache-2.0
+              Runs in your browser · No upload · Apache-2.0
             </p>
 
             <h1 className="font-display text-[3.25rem] leading-[0.95] tracking-tight sm:text-7xl lg:text-[5.5rem]">
@@ -153,12 +145,12 @@ export default function Home() {
             </p>
 
             <div className="mt-10 flex flex-wrap items-center gap-8">
-              <button
-                onClick={() => signIn("google")}
+              <Link
+                href="/scan"
                 className="bg-ink px-7 py-3.5 font-medium text-stock transition-colors hover:bg-signal"
               >
                 Scan a PDF
-              </button>
+              </Link>
               <a
                 href="#self-host"
                 className="border-b border-ink-faint pb-0.5 font-medium text-ink transition-colors hover:border-signal hover:text-signal"
@@ -171,9 +163,9 @@ export default function Home() {
           {/* Colophon — the metadata block a printed document would carry. */}
           <dl className="self-end space-y-0 border-t border-rule lg:border-t-0 lg:border-l lg:pl-10">
             {[
-              ["Upload cap", "10 MB · 12 pages"],
-              ["OCR engine", "Tesseract LSTM, local"],
-              ["Your files", "Never leave the host"],
+              ["Processing", "Your browser, not a server"],
+              ["Account", "None required"],
+              ["Your files", "Never leave the tab"],
               ["Image", "ghcr.io · amd64 + arm64"],
             ].map(([k, v]) => (
               <div
@@ -261,9 +253,10 @@ export default function Home() {
             No model. No guessing.
           </h2>
           <p className="mt-5 leading-relaxed text-ink-soft">
-            Nothing here classifies what looks suspicious. Four deterministic
-            steps, and the last one removes the hiding places rather than trying
-            to enumerate every trick.
+            Nothing here classifies what looks suspicious. Turning up the
+            contrast cannot work either: text painted in pure white rasterizes
+            to bytes identical to blank paper, so there is no difference in the
+            image to amplify. You have to ask the renderer a second question.
           </p>
         </div>
 
@@ -293,6 +286,68 @@ export default function Home() {
           original when you need the text layer; send the clean copy when you
           don&apos;t know what is in the file.
         </p>
+      </section>
+
+      {/* ----------------------------------------------------------- Privacy */}
+      <section className="border-y border-rule bg-sheet">
+        <div className="mx-auto max-w-[70rem] px-6 py-16 md:py-24">
+          <div className="mb-12 max-w-2xl">
+            <p className="label mb-3 text-signal">Where this runs</p>
+            <h2 className="font-display text-4xl leading-tight sm:text-5xl">
+              Your file never leaves the tab
+            </h2>
+            <p className="mt-5 leading-relaxed text-ink-soft">
+              Every stage above happens in your browser. The PDF goes from the
+              file picker into memory, through pdf.js, onto a canvas, and back
+              out as a download. It is never sent anywhere, because there is
+              nowhere to send it — and you do not have to take that on trust.
+            </p>
+          </div>
+
+          <dl className="grid border-t border-rule md:grid-cols-2">
+            {[
+              [
+                "No upload endpoint",
+                "The server has one route, a health check. There is no code path that receives a document, so there is nothing to misconfigure.",
+              ],
+              [
+                "No database, no disk",
+                "Nothing is persisted anywhere. Close the tab and the file, the renders and the OCR output are gone with it.",
+              ],
+              [
+                "No account",
+                "No sign-in, no email, no session. Nothing identifies you, so nothing can be associated with what you scanned.",
+              ],
+              [
+                "No third-party requests",
+                "The OCR model and WASM are served from this site, not a CDN. Open the network tab while you scan: every request goes to this origin, and none of them carry your file.",
+              ],
+            ].map(([title, body]) => (
+              <div
+                key={title}
+                className="flex gap-5 border-b border-rule py-7 md:odd:pr-10 md:even:border-l md:even:border-rule md:even:pl-10"
+              >
+                <span aria-hidden="true" className="mt-1 text-verified">
+                  ✓
+                </span>
+                <div>
+                  <dt className="font-display text-2xl leading-snug">{title}</dt>
+                  <dd className="mt-2 text-sm leading-relaxed text-ink-soft">
+                    {body}
+                  </dd>
+                </div>
+              </div>
+            ))}
+          </dl>
+
+          <p className="mt-6 max-w-2xl text-sm leading-relaxed text-ink-faint">
+            <span className="font-medium text-ink-soft">The honest caveat:</span>{" "}
+            this page is still served to you over the network, so you are
+            trusting that the code you received is the code described here. If
+            that is not good enough for your threat model, the image below runs
+            the identical build on hardware you control.
+          </p>
+        </div>
       </section>
 
       {/* ---------------------------------------------------------- Self-host */}
@@ -354,12 +409,12 @@ export default function Home() {
             Ten megabytes, twelve pages, about a minute. You will find out
             whether there was anything in there.
           </p>
-          <button
-            onClick={() => signIn("google")}
-            className="mt-8 bg-ink px-7 py-3.5 font-medium text-stock transition-colors hover:bg-signal"
+          <Link
+            href="/scan"
+            className="mt-8 inline-block bg-ink px-7 py-3.5 font-medium text-stock transition-colors hover:bg-signal"
           >
-            Sign in with Google
-          </button>
+            Open the scanner
+          </Link>
         </div>
       </section>
 

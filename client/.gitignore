@@ -46,3 +46,8 @@ next-env.d.ts
 /public/uploads
 /public/results
 /storage
+
+# Browser assets staged out of node_modules by scripts/copy-browser-assets.mjs.
+# Derived from the lockfile, so they are build output rather than source.
+/public/pdfjs
+/public/tesseract

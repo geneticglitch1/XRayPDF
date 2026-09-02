@@ -8,8 +8,8 @@ import { useState } from "react";
  *
  * The hidden line below is genuinely rendered in white on a white page — you
  * can drag-select it in the "As delivered" view exactly the way you would find
- * it in a real PDF viewer. Each stage mirrors one step the server performs:
- * render → sanitize (grayscale + histogram normalize) → OCR → flatten export.
+ * it in a real PDF viewer. Each stage mirrors one step the scanner performs:
+ * render on white and black → diff → optional OCR → flatten export.
  */
 
 type Stage = "delivered" | "revealed" | "ocr" | "cleaned";
@@ -28,11 +28,11 @@ const CAPTIONS: Record<Stage, { title: string; body: string }> = {
   },
   revealed: {
     title: "What the pixels say",
-    body: "Each page is rasterized server-side, flattened onto white, converted to grayscale, then histogram-normalized. Near-white ink gets stretched down into visible gray, so the payload stops hiding.",
+    body: "The page is rendered twice in your browser — once on white, once on black. The payload vanishes into the first and blazes in the second, so comparing the two brings it out. Turning up the contrast would not have worked: pure white ink rasterizes to bytes identical to blank paper.",
   },
   ocr: {
     title: "What the text layer says",
-    body: "Tesseract runs over the sanitized image and returns word-level boxes with confidence scores. You get a readable transcript of everything on the page, including the parts nobody was meant to read.",
+    body: "Tesseract runs over the combined image and returns word-level boxes with confidence scores. You get a readable transcript of everything on the page, including the parts nobody was meant to read.",
   },
   cleaned: {
     title: "What you download",
@@ -162,9 +162,9 @@ function PaperPage({ stage }: { stage: Exclude<Stage, "ocr"> }) {
 
   return (
     <div
-      // The real sanitize pass also converts to grayscale; this mock page is
-      // already monochrome, so only the contrast stretch is simulated — which
-      // keeps the vermilion annotation from being desaturated along with it.
+      // The mock stands in for the white/black diff: the payload simply gets
+      // the vermilion treatment the real reveal view gives it. A slight
+      // contrast lift sells the "processed" look without desaturating it.
       className={`px-7 py-8 text-[13px] leading-relaxed text-ink transition-all duration-500 sm:px-11 sm:py-12 sm:text-sm ${
         revealed ? "contrast-[1.28]" : ""
       }`}
@@ -268,8 +268,8 @@ function OcrReadout() {
         ))}
       </div>
       <p className="mt-5 border-t border-white/10 pt-3 text-[11px] leading-relaxed text-white/35">
-        Low-confidence clusters are where hidden content usually surfaces —
-        faint ink OCRs worse than real body copy.
+        Hidden text often OCRs a little worse than the body copy it hides
+        behind, so low-confidence clusters are worth a second look.
       </p>
     </div>
   );

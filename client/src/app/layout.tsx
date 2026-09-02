@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import "./globals.css";
-import Providers  from "@/lib/SessionProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -23,13 +22,13 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "XRayPDF — Strip hidden text out of PDFs",
+  title: "XRayPDF — Strip hidden text out of PDFs, in your browser",
   description:
-    "A PDF can carry text nobody sees and every machine reads: white ink on white paper, 0.5pt type, content parked off-page. XRayPDF surfaces it and exports a file with none of it left.",
+    "A PDF can carry text nobody sees and every machine reads: white ink on white paper, 0.5pt type, content parked off-page. XRayPDF finds it and rebuilds the file without it — entirely in your browser, with no upload and no account.",
   openGraph: {
-    title: "XRayPDF — Strip hidden text out of PDFs",
+    title: "XRayPDF — Strip hidden text out of PDFs, in your browser",
     description:
-      "Find the invisible text in a PDF, then download a flattened copy with no text layer left to hide in. Open source and self-hostable.",
+      "Find the invisible text in a PDF and download a flattened copy with no text layer left to hide in. Runs entirely client-side: no upload, no account, no server storage.",
     type: "website",
   },
 };
@@ -41,13 +40,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <Providers>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable} antialiased`}
       >
         {children}
       </body>
-      </Providers>
     </html>
   );
 }

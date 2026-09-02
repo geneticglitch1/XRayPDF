@@ -11,14 +11,6 @@ jobs:
     defaults:
       run:
         working-directory: client
-    env:
-      # Dummy values only satisfy module-load guards during typecheck/build.
-      # No real secrets are needed since CI does not connect to a database.
-      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
-      NEXTAUTH_SECRET: ci
-      NEXTAUTH_URL: http://localhost:3000
-      GOOGLE_CLIENT_ID: ci
-      GOOGLE_CLIENT_SECRET: ci
     steps:
       - uses: actions/checkout@v4
 
@@ -31,9 +23,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Prisma generate
-        run: npx prisma generate
-
+      # No env vars: the app has no database, no auth and no server-side
+      # processing, so nothing needs configuring to typecheck or build.
       - name: Typecheck
         run: npx tsc --noEmit
 

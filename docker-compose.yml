@@ -1,40 +1,17 @@
+# XRayPDF is stateless: every document is processed in the visitor's browser,
+# so there is no database, no storage volume and no configuration. This file
+# exists only to run the published image with a healthcheck.
 services:
-  postgres:
-    image: postgres:17-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-xray}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-xray}
-      POSTGRES_DB: ${POSTGRES_DB:-xray}
-    volumes:
-      - xray-postgres:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-xray} -d ${POSTGRES_DB:-xray}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   xray:
     # Published by .github/workflows/docker-publish.yml. To build from source
     # instead, add the override:
     #   docker compose -f docker-compose.yml -f docker-compose.build.yml up
     image: ${XRAY_IMAGE:-ghcr.io/geneticglitch1/xraypdf:latest}
     restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-    env_file:
-      - .env
-    environment:
-      # Point the app at the compose postgres service and the mounted volume.
-      DATABASE_URL: ${DATABASE_URL:-postgresql://xray:xray@postgres:5432/xray?schema=public}
-      STORAGE_DIR: /app/storage
     ports:
-      # Host port is configurable so the stack can sit behind a reverse proxy
-      # or run alongside something else already on 3000.
+      # Host port is configurable so the app can sit behind a reverse proxy or
+      # run alongside something else already on 3000.
       - "${HOST_PORT:-3000}:3000"
-    volumes:
-      - xray-storage:/app/storage
     healthcheck:
       test:
         - "CMD"
@@ -44,8 +21,4 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 30s
-
-volumes:
-  xray-postgres:
-  xray-storage:
+      start_period: 20s
