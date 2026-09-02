@@ -1,5 +1,35 @@
 @import "tailwindcss";
 
+/*
+ * Two palettes live here. The signed-in app is dark (see dashboard/layout);
+ * the marketing page is paper. The landing page is about documents, so it is
+ * built out of document materials: warm newsprint stock, near-black ink, a
+ * single vermilion reserved for content that was hiding, and an olive for
+ * content that has been cleared. Nothing else gets to be colored.
+ */
+@theme {
+  /* Paper stock — warm, never pure white. */
+  --color-stock: #f2efe6;
+  --color-sheet: #fbfaf6;
+
+  /* Ink — warm near-black, never pure black. */
+  --color-ink: #17150f;
+  --color-ink-soft: #57534a;
+  --color-ink-faint: #8b857a;
+
+  /* Hairlines do the structural work that borders-on-cards would. */
+  --color-rule: #dcd6c7;
+  --color-rule-soft: #e8e3d8;
+
+  /* Vermilion: reserved exclusively for revealed hidden content. */
+  --color-signal: #bf3517;
+  --color-signal-wash: #f7e5df;
+
+  /* Olive: the cleared / verified state. */
+  --color-verified: #3d5a37;
+  --color-verified-wash: #e5ebe1;
+}
+
 :root {
   --background: #0a0a0a;
   --foreground: #ededed;
@@ -10,6 +40,8 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-instrument-serif), "Iowan Old Style", Georgia,
+    serif;
 }
 
 body {
@@ -18,7 +50,7 @@ body {
   font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
 }
 
-/* Smooth scrollbar for dark theme */
+/* Neutral enough to read against both the dark app and the paper landing. */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -27,9 +59,17 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(128, 128, 128, 0.35);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(128, 128, 128, 0.55);
+}
+
+/* Mono label used throughout the landing page for metadata and section marks. */
+.label {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
 }
