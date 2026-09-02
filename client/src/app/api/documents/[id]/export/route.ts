@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { readdir, readFile } from "fs/promises";
 import path from "path";
 import { PDFDocument } from "pdf-lib";
+import { resultsDir } from "@/lib/storage";
 
 type ExportType = "original" | "pixel";
 
@@ -39,16 +40,9 @@ export async function GET(
   }
 
   try {
-    const resultsDir = path.join(
-      process.cwd(),
-      "public",
-      "results",
-      user.id,
-      id,
-      type
-    );
+    const dir = resultsDir(user.id, id, type);
 
-    const files = (await readdir(resultsDir))
+    const files = (await readdir(dir))
       .filter((fileName) => /^page_\d+\.png$/.test(fileName))
       .sort((a, b) => parsePageNumber(a) - parsePageNumber(b));
 
@@ -62,7 +56,7 @@ export async function GET(
     const pdfDoc = await PDFDocument.create();
 
     for (const fileName of files) {
-      const imagePath = path.join(resultsDir, fileName);
+      const imagePath = path.join(dir, fileName);
       const imageBytes = await readFile(imagePath);
       const pngImage = await pdfDoc.embedPng(imageBytes);
       const page = pdfDoc.addPage([pngImage.width, pngImage.height]);

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { writeFile, mkdir } from "fs/promises";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
+import { uploadsDir } from "@/lib/storage";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const MAX_DOCUMENTS = 5;
@@ -53,15 +54,15 @@ export async function POST(req: NextRequest) {
   }
 
   const fileId = uuidv4();
-  const uploadsDir = path.join(process.cwd(), "public", "uploads", user.id);
-  await mkdir(uploadsDir, { recursive: true });
+  const dir = uploadsDir(user.id);
+  await mkdir(dir, { recursive: true });
 
   const fileName = `${fileId}.pdf`;
-  const filePath = path.join(uploadsDir, fileName);
   const buffer = Buffer.from(await file.arrayBuffer());
-  await writeFile(filePath, buffer);
+  await writeFile(path.join(dir, fileName), buffer);
 
-  const publicPath = `/uploads/${user.id}/${fileName}`;
+  // Stored relative to STORAGE_DIR; served only via the authenticated /asset route.
+  const storageKey = `uploads/${user.id}/${fileName}`;
 
   // Detect page count from the uploaded PDF
   let pageCount = 0;
@@ -78,7 +79,7 @@ export async function POST(req: NextRequest) {
     data: {
       userId: user.id,
       originalName: file.name,
-      filePath: publicPath,
+      filePath: storageKey,
       fileSize: file.size,
       pageCount,
     },

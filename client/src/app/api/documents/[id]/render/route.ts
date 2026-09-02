@@ -2,13 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
-import { readFile, mkdir } from "fs/promises";
-import path from "path";
+import { readFile, writeFile, mkdir } from "fs/promises";
+import { loadPdf, renderPage } from "@/lib/pipeline";
+import { sourcePdfPath, resultsDir, resultPagePath } from "@/lib/storage";
 
 /**
- * Server-side PDF page renderer: renders EVERY page of the PDF as a
- * clean PNG image (no processing). Used by the "Original" panel so
- * all three panels display consistently via server-rendered images.
+ * Server-side PDF page renderer: renders EVERY page of the PDF as a clean PNG
+ * image (no processing) via the shared pipeline. Used by the "Original" panel
+ * so all three panels display consistently via server-rendered images.
+ *
+ * Result images are stored under STORAGE_DIR and served through the
+ * authenticated /asset route (never as public static files).
  */
 export async function POST(
   req: NextRequest,
@@ -33,64 +37,24 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const publicDir = `/results/${user.id}/${id}/original`;
-  const resultsDir = path.join(process.cwd(), "public", publicDir);
-
   // Always regenerate so stale cached renders don't persist.
-
   try {
-    const pdfPath = path.join(process.cwd(), "public", doc.filePath);
-    const pdfBuffer = await readFile(pdfPath);
-
-    const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-    const loadingTask = pdfjsLib.getDocument({
-      data: new Uint8Array(pdfBuffer),
-    });
-    const pdfDoc = await loadingTask.promise;
+    const pdfBuffer = await readFile(sourcePdfPath(doc.filePath));
+    const pdfDoc = await loadPdf(pdfBuffer);
     const numPages = pdfDoc.numPages;
 
-    await mkdir(resultsDir, { recursive: true });
+    await mkdir(resultsDir(user.id, id, "original"), { recursive: true });
 
     const pages: { page: number; path: string }[] = [];
-    const { createCanvas } = await import("@napi-rs/canvas");
-
     for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-      const page = await pdfDoc.getPage(pageNum);
-      const scale = 2.0;
-      const viewport = page.getViewport({ scale });
-      const width = Math.floor(viewport.width);
-      const height = Math.floor(viewport.height);
-
-      const canvas = createCanvas(width, height);
-      const ctx = canvas.getContext("2d");
-
-      // Fill white background — node-canvas defaults to transparent
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, width, height);
-
-      await page.render({
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        canvasContext: ctx as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        canvas: canvas as any,
-        viewport,
-      }).promise;
-
-      const resultFileName = `page_${pageNum}.png`;
-      const resultPath = path.join(resultsDir, resultFileName);
-
-      // Write the raw rendered PNG — no sharp processing
-      const buffer = canvas.toBuffer("image/png");
-      const { writeFile } = await import("fs/promises");
-      await writeFile(resultPath, buffer);
-
+      const { buffer } = await renderPage(pdfDoc, pageNum);
+      await writeFile(resultPagePath(user.id, id, "original", pageNum), buffer);
       pages.push({
         page: pageNum,
-        path: `${publicDir}/${resultFileName}`,
+        path: `/api/documents/${id}/asset?type=original&page=${pageNum}`,
       });
     }
 
-    // Update pageCount if not set
     if (doc.pageCount === 0) {
       await prisma.pdfDocument.update({
         where: { id },
@@ -101,9 +65,6 @@ export async function POST(
     return NextResponse.json({ pages, pageCount: numPages });
   } catch (e) {
     console.error("Render error:", e);
-    return NextResponse.json(
-      { error: "Page rendering failed" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Page rendering failed" }, { status: 500 });
   }
 }

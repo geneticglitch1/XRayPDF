@@ -9,5 +9,8 @@ Dockerfile
 .env.*
 *.local
 coverage
+# legacy public storage locations (no longer used)
 public/results
 public/uploads
+# runtime data volume — never bake into the image
+storage

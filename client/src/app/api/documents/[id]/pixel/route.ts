@@ -2,14 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
-import sharp from "sharp";
-import { readFile, mkdir } from "fs/promises";
-import path from "path";
+import { readFile, writeFile, mkdir } from "fs/promises";
+import { loadPdf, renderPage, sanitizePage } from "@/lib/pipeline";
+import { sourcePdfPath, resultsDir, resultPagePath } from "@/lib/storage";
 
 /**
- * Pixel-level analysis: renders EVERY page of the PDF as a PNG,
- * inverts colors and boosts contrast to reveal hidden white-on-white text.
- * Returns an array of per-page result image paths.
+ * Pixel-level analysis: renders EVERY page of the PDF and runs the shared
+ * sanitize pipeline (flatten→grayscale→normalize→sharpen) to reveal hidden
+ * white-on-white / low-contrast text. Returns per-page result image paths that
+ * are served through the authenticated /asset route.
  */
 export async function POST(
   req: NextRequest,
@@ -35,84 +36,28 @@ export async function POST(
   }
 
   // Always regenerate so stale cached outputs don't persist.
-
   try {
-    const pdfPath = path.join(process.cwd(), "public", doc.filePath);
-    const pdfBuffer = await readFile(pdfPath);
-
-    const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-    const loadingTask = pdfjsLib.getDocument({
-      data: new Uint8Array(pdfBuffer),
-    });
-    const pdfDoc = await loadingTask.promise;
+    const pdfBuffer = await readFile(sourcePdfPath(doc.filePath));
+    const pdfDoc = await loadPdf(pdfBuffer);
     const numPages = pdfDoc.numPages;
 
-    const resultsDir = path.join(
-      process.cwd(),
-      "public",
-      "results",
-      user.id,
-      id,
-      "pixel"
-    );
-    await mkdir(resultsDir, { recursive: true });
+    await mkdir(resultsDir(user.id, id, "pixel"), { recursive: true });
 
-    const publicDir = `/results/${user.id}/${id}/pixel`;
     const pages: { page: number; path: string }[] = [];
-
-    const { createCanvas } = await import("@napi-rs/canvas");
-
     for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-      const page = await pdfDoc.getPage(pageNum);
-      const scale = 2.0;
-      const viewport = page.getViewport({ scale });
-      const width = Math.floor(viewport.width);
-      const height = Math.floor(viewport.height);
-
-      const canvas = createCanvas(width, height);
-      const ctx = canvas.getContext("2d");
-
-      // Fill with white background first — node-canvas starts transparent
-      // which causes the image to appear all-black after processing
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, width, height);
-
-      await page.render({
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        canvasContext: ctx as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        canvas: canvas as any,
-        viewport,
-      }).promise;
-
-      const imageBuffer = canvas.toBuffer("image/png");
-
-      const resultFileName = `page_${pageNum}.png`;
-      const resultPath = path.join(resultsDir, resultFileName);
-
-      // Pixel analysis pipeline:
-      // 1. flatten alpha to white (ensures no transparent areas)
-      // 2. grayscale for clarity
-      // 3. normalize stretches histogram to full 0-255 range,
-      //    revealing subtle near-white hidden text
-      // 4. sharpen edges to make text crisp
-      await sharp(imageBuffer)
-        .flatten({ background: { r: 255, g: 255, b: 255 } })
-        .grayscale()
-        .normalize()
-        .sharpen({ sigma: 3 })
-        .toFile(resultPath);
-
+      const { buffer } = await renderPage(pdfDoc, pageNum);
+      const sanitized = await sanitizePage(buffer);
+      await writeFile(resultPagePath(user.id, id, "pixel", pageNum), sanitized);
       pages.push({
         page: pageNum,
-        path: `${publicDir}/${resultFileName}`,
+        path: `/api/documents/${id}/asset?type=pixel&page=${pageNum}`,
       });
     }
 
     await prisma.pdfDocument.update({
       where: { id },
       data: {
-        pixelResultDir: publicDir,
+        pixelResultDir: `results/${user.id}/${id}/pixel`,
         pixelPageCount: numPages,
         pageCount: numPages,
       },
@@ -121,9 +66,6 @@ export async function POST(
     return NextResponse.json({ pages, pageCount: numPages });
   } catch (e) {
     console.error("Pixel analysis error:", e);
-    return NextResponse.json(
-      { error: "Pixel analysis failed" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Pixel analysis failed" }, { status: 500 });
   }
 }

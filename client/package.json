@@ -12,8 +12,6 @@
     "@napi-rs/canvas": "^0.1.95",
     "@prisma/adapter-pg": "^7.4.1",
     "@prisma/client": "^7.4.1",
-    "canvas": "^3.2.1",
-    "multer": "^2.0.2",
     "next": "16.1.6",
     "next-auth": "^4.24.13",
     "pdf-lib": "^1.17.1",
