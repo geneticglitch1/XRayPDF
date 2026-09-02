@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
     tags: ["v*.*.*"]
+  # Build (but do not publish) on PRs, so a broken Dockerfile is caught before
+  # it reaches main rather than after. Without this the image build gets no
+  # coverage at all until merge.
+  pull_request:
   workflow_dispatch:
 
 env:
@@ -34,6 +38,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -67,16 +72,22 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./client
-          platforms: linux/amd64,linux/arm64
-          push: true
+          # PRs only need to prove the image builds; the emulated arm64 leg is
+          # the slow part, so save it for builds that actually publish.
+          platforms: >-
+            ${{ github.event_name == 'pull_request'
+                && 'linux/amd64'
+                || 'linux/amd64,linux/arm64' }}
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          provenance: mode=max
-          sbom: true
+          provenance: ${{ github.event_name != 'pull_request' && 'mode=max' || 'false' }}
+          sbom: ${{ github.event_name != 'pull_request' }}
 
       - name: Attest build provenance
+        if: github.event_name != 'pull_request'
         uses: actions/attest-build-provenance@v2
         with:
           subject-name: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
